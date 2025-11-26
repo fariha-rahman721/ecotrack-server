@@ -1,6 +1,8 @@
 const express = require('express')
 const cors = require('cors')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const admin = require("firebase-admin");
+const serviceAccount = require("./ecoTrackPrivateKey.json");
 const app = express()
 const port = 3000
 
@@ -11,6 +13,12 @@ app.get('/', (req, res) => {
   res.send('Hello World!')
 })
 
+
+
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 
 
@@ -33,18 +41,52 @@ async function run() {
 
     const db = client.db("ecoTrackDB");
     const cardsCollection = db.collection("cards");
+    // const usersCollection = db.collection("userChallenges");
 
+
+    //  cards
     app.get('/cards', async (req, res) => {
       const cursor = cardsCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
 
-    app.get('/cards/:id', async (req, res) => {
+
+    // user challenge
+    // app.get('/userChallenge/:id', async (req, res) => {
+    //   const id = req.params;
+    //   const objectId = new ObjectId(id);
+    //   const result = await usersCollection.insertOne({ _id: objectId });
+    //   res.send(result);
+    // });
+
+
+    const verifyToken = async (req, res, next) => {
+      const authorization = req.headers.authorization;
+      const token = authorization.split(' ')[1];
+
+      if (!token) {
+        return res.status(401).send({message: 'unauthorized access'});
+      }
+      
+      try {
+       await admin.auth().verifyIdToken(token)
+        next();
+      } catch (error) {
+        res.status(401).send({message: 'unauthorized access'});
+      }
+      
+    }
+
+
+    app.get('/cards/:id', verifyToken ,async (req, res) => {
       const id = req.params;
       const objectId = new ObjectId(id);
       const result = await cardsCollection.findOne({ _id: objectId });
-      res.send(result);
+      res.send({
+        success: true,
+        result
+      });
     });
 
 
