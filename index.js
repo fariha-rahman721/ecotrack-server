@@ -55,6 +55,7 @@ async function run() {
     const db = client.db("ecoTrackDB");
     const cardsCollection = db.collection("cards");
     const joinChallengeCollection = db.collection("join-challenges");
+    const tipsCollection = db.collection("communityTips");
 
     
 
@@ -87,17 +88,51 @@ async function run() {
     });
 
     // JOIN CHALLENGE
-    app.post('/join-challenges', async (req, res) => {
-      const challenge = req.body;
-      const result = await joinChallengeCollection.insertOne(challenge);
-      res.send(result);
-    });
+  app.post('/join-challenges/:id', async (req, res) => {
+    try {
+        const challenge = req.body;
+        const id = req.params.id; 
+        const result = await joinChallengeCollection.insertOne(challenge);
+
+        
+        const filter = { _id: new ObjectId(id) }; 
+        const update = { $inc: { participants: 1 } };
+        const participantsCount = await cardsCollection.updateOne(filter, update);
+
+        
+        res.send({
+            joinResult: result,
+            participantsUpdate: participantsCount
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: 'Something went wrong!' });
+    }
+});
+
 
      app.get('/my-activities', verifyToken, async (req, res) => {
       const email = req.query.email;
       const result = await joinChallengeCollection.find({ joinedBy: email }).toArray();
       res.send(result);
     });
+
+
+    // delete joined challenge
+    app.delete('/my-activities/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const objectId = new ObjectId(id);
+      const result = await joinChallengeCollection.deleteOne({ _id: objectId });
+      res.send({ success: true, result });
+    });
+
+    // Get all community tips
+    app.get('/communityTips', async (req, res) => {
+      const result = await tipsCollection.find().toArray();
+      res.send(result);
+    });
+
 
     // Test DB connection
     await client.db("admin").command({ ping: 1 });
