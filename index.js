@@ -56,8 +56,9 @@ async function run() {
     const cardsCollection = db.collection("cards");
     const joinChallengeCollection = db.collection("join-challenges");
     const tipsCollection = db.collection("communityTips");
+    const eventsCollection = db.collection("upcomingEvents");
 
-    
+
 
     // Get all cards
     app.get('/cards', async (req, res) => {
@@ -88,31 +89,31 @@ async function run() {
     });
 
     // JOIN CHALLENGE
-  app.post('/join-challenges/:id', async (req, res) => {
-    try {
+    app.post('/join-challenges/:id', async (req, res) => {
+      try {
         const challenge = req.body;
-        const id = req.params.id; 
+        const id = req.params.id;
         const result = await joinChallengeCollection.insertOne(challenge);
 
-        
-        const filter = { _id: new ObjectId(id) }; 
+
+        const filter = { _id: new ObjectId(id) };
         const update = { $inc: { participants: 1 } };
         const participantsCount = await cardsCollection.updateOne(filter, update);
 
-        
+
         res.send({
-            joinResult: result,
-            participantsUpdate: participantsCount
+          joinResult: result,
+          participantsUpdate: participantsCount
         });
 
-    } catch (error) {
+      } catch (error) {
         console.error(error);
         res.status(500).send({ error: 'Something went wrong!' });
-    }
-});
+      }
+    });
 
 
-     app.get('/my-activities', verifyToken, async (req, res) => {
+    app.get('/my-activities', verifyToken, async (req, res) => {
       const email = req.query.email;
       const result = await joinChallengeCollection.find({ joinedBy: email }).toArray();
       res.send(result);
@@ -130,6 +131,12 @@ async function run() {
     // Get all community tips
     app.get('/communityTips', async (req, res) => {
       const result = await tipsCollection.find().toArray();
+      res.send(result);
+    });
+
+    // Get all upcoming events
+    app.get('/upcomingEvents', async (req, res) => {
+      const result = await eventsCollection.find().toArray();
       res.send(result);
     });
 
