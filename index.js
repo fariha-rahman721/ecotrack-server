@@ -32,21 +32,31 @@ const client = new MongoClient(uri, {
 
 
 const verifyToken = async (req, res, next) => {
+
   const authorization = req.headers.authorization;
+  console.log('Authorization Header:', authorization);
 
   if (!authorization) {
-    return res.status(401).send({ message: "unauthorized access" });
+    return res.status(401).send({
+      message: "unauthorized access. Token not found!",
+    });
   }
 
   const token = authorization.split(" ")[1];
-
   try {
-    await admin.auth().verifyIdToken(token);
+
+    const user = await admin.auth().verifyIdToken(token);
+    req.user = user;
+
     next();
   } catch (error) {
-    res.status(401).send({ message: "unauthorized access" });
+    res.status(405).send({
+      message: "unauthorized access.",
+    });
   }
 };
+
+
 
 async function run() {
   try {
@@ -88,15 +98,34 @@ async function run() {
       res.send(result);
     });
 
-    // JOIN CHALLENGE
+    // update challenge
+    app.put('/cards/:id', async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updatedChallenge = req.body;
+
+        const filter = { _id: id };
+        const updateDoc = { $set: updatedChallenge };
+
+        const result = await cardsCollection.updateOne(filter, updateDoc);
+
+        res.send({ success: true, result });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ success: false, message: "Update failed" });
+      }
+    });
+
+    // join chlallenge
     app.post('/join-challenges/:id', async (req, res) => {
       try {
         const challenge = req.body;
+
         const id = req.params.id;
         const result = await joinChallengeCollection.insertOne(challenge);
 
 
-        const filter = { _id: new ObjectId(id) };
+        const filter = { _id: id };
         const update = { $inc: { participants: 1 } };
         const participantsCount = await cardsCollection.updateOne(filter, update);
 
@@ -115,18 +144,44 @@ async function run() {
 
     app.get('/my-activities', verifyToken, async (req, res) => {
       const email = req.query.email;
-      const result = await joinChallengeCollection.find({ joinedBy: email }).toArray();
+      const result = await joinChallengeCollection.find({ createdBy: email }).toArray();
       res.send(result);
     });
 
 
+
+
+
+
     // delete joined challenge
     app.delete('/my-activities/:id', verifyToken, async (req, res) => {
-      const id = req.params.id;
-      const objectId = new ObjectId(id);
-      const result = await joinChallengeCollection.deleteOne({ _id: objectId });
-      res.send({ success: true, result });
+      try {
+        const id = req.params.id;
+        const email = req.user.email;
+
+        const result = await joinChallengeCollection.deleteOne({
+          _id: new ObjectId(id),
+          createdBy: email
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(403).send({
+            success: false,
+            message: 'Not allowed or not found'
+          });
+        }
+
+        res.send({ success: true });
+
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ success: false });
+      }
     });
+
+
+
+
 
     // Get all community tips
     app.get('/communityTips', async (req, res) => {
