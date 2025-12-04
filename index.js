@@ -61,7 +61,7 @@ const verifyToken = async (req, res, next) => {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
 
     const db = client.db("ecoTrackDB");
     const cardsCollection = db.collection("cards");
@@ -69,7 +69,7 @@ async function run() {
     const tipsCollection = db.collection("communityTips");
     const eventsCollection = db.collection("upcomingEvents");
 
-
+    
 
     // Get all cards
     app.get('/cards', async (req, res) => {
@@ -201,7 +201,7 @@ async function run() {
 
 
     // Test DB connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB.");
   } catch (error) {
     console.error("Server crashed:", error);
