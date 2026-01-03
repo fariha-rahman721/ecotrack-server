@@ -68,8 +68,8 @@ async function run() {
     const joinChallengeCollection = db.collection("join-challenges");
     const tipsCollection = db.collection("communityTips");
     const eventsCollection = db.collection("upcomingEvents");
+    const userCollection = db.collection("users");
 
-    
 
     // Get all cards
     app.get('/cards', async (req, res) => {
@@ -107,7 +107,7 @@ async function run() {
         const id = req.params.id;
         const updatedChallenge = req.body;
 
-        const filter = { _id: new ObjectId(id) };   // ✅ FIXED
+        const filter = { _id: new ObjectId(id) };
         const updateDoc = { $set: updatedChallenge };
 
         const result = await cardsCollection.updateOne(filter, updateDoc);
@@ -123,21 +123,37 @@ async function run() {
     // join chlallenge
     app.post('/join-challenges/:id', verifyToken, async (req, res) => {
       try {
-        const challenge = req.body;
+        const challengeId = req.params.id;
+        const userEmail = req.user.email;
 
-        const id = req.params.id;
-        const result = await joinChallengeCollection.insertOne(challenge);
+        // Get challenge info
+        const challenge = await cardsCollection.findOne({ _id: new ObjectId(challengeId) });
+        if (!challenge) return res.status(404).send({ message: 'Challenge not found' });
 
+        // Get user info
+        const userInfo = await userCollection.findOne({ email: userEmail });
+        if (!userInfo) return res.status(404).send({ message: 'User not found' });
 
-        const filter = { _id: id };
-        const update = { $inc: { participants: 1 } };
-        const participantsCount = await cardsCollection.updateOne(filter, update);
+        // Create join entry
+        const joinEntry = {
+          challengeId,
+          challengeTitle: challenge.title,
+          challengeCategory: challenge.category,
+          createdBy: userEmail,
+          userName: userInfo.name || '',
+          userPhoto: userInfo.photoURL || '',
+          createdAt: new Date(),
+        };
 
+        const result = await joinChallengeCollection.insertOne(joinEntry);
 
-        res.send({
-          joinResult: result,
-          participantsUpdate: participantsCount
-        });
+        // Increment participants count
+        const participantsUpdate = await cardsCollection.updateOne(
+          { _id: new ObjectId(challengeId) },
+          { $inc: { participants: 1 } }
+        );
+
+        res.send({ joinResult: result, participantsUpdate });
 
       } catch (error) {
         console.error(error);
@@ -146,15 +162,12 @@ async function run() {
     });
 
 
+
     app.get('/my-activities', verifyToken, async (req, res) => {
       const email = req.query.email;
       const result = await joinChallengeCollection.find({ createdBy: email }).toArray();
       res.send(result);
     });
-
-
-
-
 
 
     // delete joined challenge
@@ -184,6 +197,76 @@ async function run() {
     });
 
 
+    // get joined participants
+    app.get('/joined-participants', verifyToken, async (req, res) => {
+      try {
+        const participants = await joinChallengeCollection.find().toArray();
+        res.send(participants);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch participants' });
+      }
+    });
+
+
+
+    // get all users
+    // GET all users
+    app.get('/users', verifyToken, async (req, res) => {
+      try {
+        const users = await userCollection.find().toArray();
+
+        // Convert ObjectId to string for frontend display
+        const usersWithId = users.map(u => ({
+          ...u,
+          _id: u._id.toString()
+        }));
+
+        res.send({ success: true, users: usersWithId });
+      } catch (error) {
+        console.error("Fetch users error:", error);
+        res.status(500).send({ success: false, message: 'Failed to fetch users' });
+      }
+    });
+
+    // POST user (create or update)
+    app.post('/users', async (req, res) => {
+      try {
+        const userData = req.body;
+        if (!userData.email) {
+          return res.status(400).send({ success: false, message: "Email is required" });
+        }
+
+        const query = { email: userData.email };
+        const alreadyExists = await userCollection.findOne(query);
+
+        if (alreadyExists) {
+          const result = await userCollection.updateOne(query, {
+            $set: {
+              last_loggedIn: new Date().toISOString(),
+              name: userData.name || alreadyExists.name,
+              photoURL: userData.photoURL || alreadyExists.photoURL,
+            },
+          });
+
+          return res.send({ success: true, updated: true, result });
+        }
+
+        // New user
+        const newUser = {
+          ...userData,
+          created_at: new Date().toISOString(),
+          last_loggedIn: new Date().toISOString(),
+          role: 'Member',
+        };
+
+        const result = await userCollection.insertOne(newUser);
+
+        res.send({ success: true, created: true, result });
+      } catch (error) {
+        console.error("User save error:", error);
+        res.status(500).send({ success: false, message: "User save failed" });
+      }
+    });
 
 
 
