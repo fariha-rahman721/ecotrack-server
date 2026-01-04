@@ -6,7 +6,8 @@ require('dotenv').config();
 const serviceAccount = require("./ecoTrackPrivateKey.json");
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
+
 
 app.use(cors());
 app.use(express.json());
@@ -268,6 +269,18 @@ async function run() {
       }
     });
 
+
+     app.get('/users/role/:email', verifyToken, async (req, res) => {
+            const email = req.params.email;
+
+
+            if (req.user.email !== email) {
+                return res.status(403).send({ message: "Forbidden access" });
+            }
+
+            const result = await userCollection.findOne({ email });
+            res.send({ role: result?.role });
+        });
 
 
     // Get all community tips
